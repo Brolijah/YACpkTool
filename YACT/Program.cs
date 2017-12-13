@@ -469,9 +469,9 @@ namespace YACpkTool
                 Console.WriteLine("      YACpkTool.exe -P -i \"X:\\path\\to\\contents\\folder\\\"");
                 Console.WriteLine("      YACpkTool.exe -P -i folder --codec LAYLA --align 2048");
                 Console.WriteLine("    Replacing:");
-                Console.WriteLine("      YACpkTool.exe -R -d \"X:\\path\\to\\cpk\" -i data0.cpk -R fol/in/cpk/thing.bin new_thing.bin");
-                Console.WriteLine("      YACpkTool.exe -R -i \"X:\\path\\to\\cpk\\data0.cpk\" -R fol/in/cpk/thing.bin \"X:\\path\\to\\new\\file.bin\"");
-                Console.WriteLine("      YACpkTool.exe -R -i data0.cpk -R fol/in/cpk/thing.bin new_thing.bin -o data0_patched.cpk");
+                Console.WriteLine("      YACpkTool.exe -d \"X:\\path\\to\\cpk\" -i data0.cpk -R fol/in/cpk/thing.bin new_thing.bin");
+                Console.WriteLine("      YACpkTool.exe -i \"X:\\path\\to\\cpk\\data0.cpk\" -R fol/in/cpk/thing.bin \"X:\\path\\to\\new\\file.bin\"");
+                Console.WriteLine("      YACpkTool.exe -i data0.cpk -R fol/in/cpk/thing.bin new_thing.bin -o data0_patched.cpk");
             }
 
         }
