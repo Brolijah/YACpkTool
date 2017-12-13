@@ -25,13 +25,12 @@ Technical CLI usage:
     -X {file}   Extracts files. Optional argument: A specific file
     -P          Packages a folder to a CPK.
     -R {file}(in cpk) {file}(in dir)
-                STILL WIP! DISABLED!
                 Replaces a specified file in the CPK.
+    -L          Lists the file contents and some basic information about the CPK.
   options:
     -h          Displays this help information + examples + about info
-    -l          Lists each file contained or being processed (TODO). Doubles as a command (Complete).
     -v          Displays technical info about the running process (TODO).
-    -i {name}   Your input file or folder name (REQUIRED FOR ALL OPERATIONS)
+    -i {name}   Your input file or folder name (REQUIRED FOR ALL COMMANDS)
     -o {name}   Your output file or folder name (relative or absolute)
     -d {path}   Directory name. If specified, extraction and/or packaging will search here instead.
 
@@ -42,14 +41,18 @@ Technical CLI usage:
                       Default is 2048. Available options: Powers of 2 between 1 and 32768.
 
   Examples:
-    Listing contents (could use refinement):
-      YACpkTool.exe -l -i data0.cpk
-      YACpkTool.exe -l -v -i data0.cpk
+    Listing contents:
+      YACpkTool.exe -L -i data0.cpk
+      YACpkTool.exe -L -v -i data0.cpk
     Extraction:
-      YACpkTool.exe -X fol/inside/cpk/thing -i "X:\path\to\cpk\data0.cpk"
+      YACpkTool.exe -X fol/in/cpk/thing.bin -i "X:\path\to\cpk\data0.cpk"
       YACpkTool.exe -X -d "X:\path\to\cpk" -i data0.cpk
       YACpkTool.exe -X -i data0.cpk
     Packing:
       YACpkTool.exe -P -d "X:\path\to\contents\" -i folder -o new_package.cpk
       YACpkTool.exe -P -i "X:\path\to\contents\folder\"
       YACpkTool.exe -P -i folder --codec LAYLA --align 2048
+    Replacing:
+      YACpkTool.exe -R -d "X:\path\to\cpk" -i data0.cpk -R fol/in/cpk/thing.bin new_thing.bin
+      YACpkTool.exe -R -i "X:\path\to\cpk\data0.cpk" -R fol/in/cpk/thing.bin "X:\path\to\new\file.bin"
+      YACpkTool.exe -R -i data0.cpk -R fol/in/cpk/thing.bin new_thing.bin -o data0_patched.cpk

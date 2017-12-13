@@ -22,8 +22,8 @@ namespace YACpkTool
                 PrintUsage(NO_ARGS);
                 return;
             }
-            
-            bool bList = false;
+
+            bool bList = false; // Old method, TODO update
             bool bVerbose = false;
             bool doExtract = false;
             bool doPack = false;
@@ -68,10 +68,10 @@ namespace YACpkTool
                                         usageHelpFlags |= WRONG_USAGE;
                                     }
                                     break;
+                                case 'L': bList = true; break;
                                 case 'i': inFileName = args[i + 1]; break;
                                 case 'o': outFileName = args[i + 1]; break;
                                 case 'd': workingDir = args[i + 1]; break;
-                                case 'l': bList = true; break;
                                 case 'v': bVerbose = true; break;
                                 // These are packing options
                                 case '-':
@@ -178,7 +178,7 @@ namespace YACpkTool
                     else if (String.Equals(packCompressCodec, "layla", StringComparison.CurrentCultureIgnoreCase))
                     {
                         compressCodec = EnumCompressCodec.CodecLayla;
-                    }/*
+                    }/* Not implemented, according to CpkMaker
                     else if (String.Equals(packCompressCodec, "lzma", StringComparison.CurrentCultureIgnoreCase))
                     {
                         compressCodec = EnumCompressCodec.CodecLZMA;
@@ -293,8 +293,7 @@ namespace YACpkTool
             }
             else if (doReplace)
             {
-                Console.WriteLine("DEBUG: doReplace! - TODO (Currently broken)");
-                /** It's broke for now...
+                //Console.WriteLine("DEBUG: doReplace! - TODO");
 
                 CFileInfo cFileInfo = cpkFileData.GetFileData(replaceWhat);
                 if (cFileInfo != null)
@@ -314,13 +313,6 @@ namespace YACpkTool
                         return;
                     }
                     replaceWith = replaceWith.Replace('/', '\\');
-                    
-                    cpkMaker.DeleteFile(replaceWhat);
-                    CFileInfo newFileInfo = cpkMaker.AddFile(replaceWith, replaceWhat, cFileInfo.FileId, cFileInfo.IsCompressed,
-                        cFileInfo.GroupString, cFileInfo.AttributeString, cFileInfo.DataAlign, cFileInfo.UniTarget, (int)cFileInfo.RegisteredId);
-
-                    cpkMaker.FileData.UpdateFileInfoPackingOrder();
-                    cpkMaker.FileData.UpdateFileInfoIndex();
 
                     if (outFileName == null)
                     {
@@ -330,44 +322,53 @@ namespace YACpkTool
                     {
                         outFileName += ".cpk";
                     }
+                    
+                    cpkMaker.DeleteFile(replaceWhat);
+                    cpkMaker.AddFile(replaceWith, replaceWhat, cFileInfo.FileId, cFileInfo.IsCompressed,
+                        cFileInfo.GroupString, cFileInfo.AttributeString, cFileInfo.DataAlign);
+                    cpkMaker.FileData.UpdateFileInfoPackingOrder();
+
+                    Console.WriteLine("Preparing new CPK...");
                     File.Create(outFileName).Close();
                     cpkMaker.StartToBuild(outFileName);
                     cpkMaker.WaitForComplete();
-                    CpkMaker newCpk = new CpkMaker();
-                    if (!newCpk.AnalyzeCpkFile(outFileName))
-                    {
-                        Console.WriteLine("Error: AnalyzeCpkFile returned false!");
-                        return;
-                    }
 
-                    CAsyncFile cpkReader = new CAsyncFile();
-                    cpkReader.ReadOpen(inFileName);
-                    cpkReader.WaitForComplete();
-                    CAsyncFile cpkWriter = new CAsyncFile();
-                    cpkWriter.WriteOpen(outFileName, true);
-                    cpkWriter.WaitForComplete();
-                    for (int i = 0; i < newCpk.FileData.FileInfos.Count; i++)
+                    CAsyncFile currOldFile = new CAsyncFile(2);
+                    currOldFile.ReadOpen(inFileName);
+                    currOldFile.WaitForComplete();
+                    CAsyncFile patchedFile = new CAsyncFile(2);
+                    patchedFile.WriteOpen(outFileName, true);
+                    patchedFile.WaitForComplete();
+                    Console.WriteLine("Patching in files...");
+                    unsafe
                     {
-                        CFileInfo currentFile = newCpk.FileData.FileInfos[i];
-                        if (newCpk.FileData.FileInfos[i].RegisteredId != cFileInfo.RegisteredId)
+                        for (int i = 0; i < cpkMaker.FileData.FileInfos.Count; i++)
                         {
-                            CFileInfo fileToCopy = cpkFileData.GetFileData(currentFile.ContentFilePath);
-                            if (fileToCopy == null) { Console.WriteLine("Error!"); continue; }
-                            //cpkReader.Position = fileToCopy.Offset;
-                            cpkWriter.Position = currentFile.Offset;
-                            Console.WriteLine("Writing " + fileToCopy.ContentFilePath + " ...");
-                            cManager.Copy(cpkReader, cpkWriter, fileToCopy.Offset, fileToCopy.Filesize, CAsyncFile.CopyMode.TryWriteCompress);
-                            cManager.WaitForComplete();
+                            if(String.Equals(cpkFileData.FileInfos[i].ContentFilePath, cFileInfo.ContentFilePath)) { continue; }
+
+                            CFileInfo currNewFileInfo = cpkMaker.FileData.FileInfos[i];
+                            CFileInfo currOldFileInfo = cpkFileData.GetFileData(currNewFileInfo.ContentFilePath);
+
+                            patchedFile.Position = currNewFileInfo.Offset + currOldFileInfo.DataAlign;
+                            if (bVerbose) { Console.WriteLine("[" + currNewFileInfo.InfoIndex.ToString().PadLeft(5) + "]   " + currNewFileInfo.ContentFilePath + " ..."); }
+                            //Console.WriteLine("Current position = 0x" + patchedFile.Position.ToString("X8"));
+                            currOldFile.ReadAlloc(currOldFileInfo.Offset + currOldFileInfo.DataAlign, currOldFileInfo.Filesize);
+                            currOldFile.WaitForComplete();
+                            
+                            patchedFile.Write(currOldFile.ReadBuffer, currOldFileInfo.Filesize, CAsyncFile.WriteMode.Normal);
+                            patchedFile.WaitForComplete();
+
+                            currOldFile.ReleaseBuffer();
+                            //if (true) return; // Used with debugging
                         }
                     }
-                    Console.WriteLine("\nBuild completed?");
+                    Console.WriteLine("Patch complete!");
                 }
                 else
                 {
                     Console.WriteLine("Error: Unable to locate the specified file in the CPK \"" + replaceWhat + "\"");
                     return;
                 }
-                */
             }
             else if (_doList)
             {
@@ -437,13 +438,12 @@ namespace YACpkTool
                 Console.WriteLine("    -X {file}   Extracts files. Optional argument: A specific file");
                 Console.WriteLine("    -P          Packages a folder to a CPK.");
                 Console.WriteLine("    -R {file}(in cpk) {file}(in dir)");
-                Console.WriteLine("                STILL WIP! DISABLED!");
                 Console.WriteLine("                Replaces a specified file in the CPK." + (((printFlags & HELP_INFO) == 0) ? " See help for more info." : ""));
+                Console.WriteLine("    -L          Lists the file contents and some basic information about the CPK.");
                 Console.WriteLine("  options:");
                 Console.WriteLine("    -h          Displays this help information + examples + about info");
-                Console.WriteLine("    -l          Lists each file contained or being processed (TODO). Doubles as a command (Complete).");
                 Console.WriteLine("    -v          Displays technical info about the running process (TODO).");
-                Console.WriteLine("    -i {name}   Your input file or folder name (REQUIRED FOR ALL OPERATIONS)");
+                Console.WriteLine("    -i {name}   Your input file or folder name (REQUIRED FOR ALL COMMANDS)");
                 Console.WriteLine("    -o {name}   Your output file or folder name (relative or absolute)");
                 Console.WriteLine("    -d {path}   Directory name. If specified, extraction and/or packaging will search here instead.");
 
@@ -457,17 +457,21 @@ namespace YACpkTool
             {
                 Console.WriteLine("");
                 Console.WriteLine("  Examples:");
-                Console.WriteLine("    Listing contents (could use refinement):");
-                Console.WriteLine("      YACpkTool.exe -l -i data0.cpk");
-                Console.WriteLine("      YACpkTool.exe -l -v -i data0.cpk");
+                Console.WriteLine("    Listing contents:");
+                Console.WriteLine("      YACpkTool.exe -L -i data0.cpk");
+                Console.WriteLine("      YACpkTool.exe -L -v -i data0.cpk");
                 Console.WriteLine("    Extraction:");
-                Console.WriteLine("      YACpkTool.exe -X fol/inside/cpk/thing -i \"X:\\path\\to\\cpk\\data0.cpk\"");
+                Console.WriteLine("      YACpkTool.exe -X fol/in/cpk/thing.bin -i \"X:\\path\\to\\cpk\\data0.cpk\"");
                 Console.WriteLine("      YACpkTool.exe -X -d \"X:\\path\\to\\cpk\" -i data0.cpk");
                 Console.WriteLine("      YACpkTool.exe -X -i data0.cpk");
                 Console.WriteLine("    Packing:");
                 Console.WriteLine("      YACpkTool.exe -P -d \"X:\\path\\to\\contents\\\" -i folder -o new_package.cpk");
                 Console.WriteLine("      YACpkTool.exe -P -i \"X:\\path\\to\\contents\\folder\\\"");
                 Console.WriteLine("      YACpkTool.exe -P -i folder --codec LAYLA --align 2048");
+                Console.WriteLine("    Replacing:");
+                Console.WriteLine("      YACpkTool.exe -R -d \"X:\\path\\to\\cpk\" -i data0.cpk -R fol/in/cpk/thing.bin new_thing.bin");
+                Console.WriteLine("      YACpkTool.exe -R -i \"X:\\path\\to\\cpk\\data0.cpk\" -R fol/in/cpk/thing.bin \"X:\\path\\to\\new\\file.bin\"");
+                Console.WriteLine("      YACpkTool.exe -R -i data0.cpk -R fol/in/cpk/thing.bin new_thing.bin -o data0_patched.cpk");
             }
 
         }
