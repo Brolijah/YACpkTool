@@ -1,9 +1,9 @@
 ﻿Yet Another CPK Tool, written by Brolijah
 
- DISCLAIMER: THIS IS A WORK IN PROGRESS BUILD
-The only thing I haven't completed is in-CPK file replacement yet. It's still in 
-the works, but I hope to have it done soon. It should be possible albeit with some 
-caveats as described in CriWare's user manual.
+Please note that file replacement is something still experimental. It needs some toying
+around with to find out what does and what doesn't break the result CPK file. It should
+be possible albeit with some caveats as described in CriWare's user manual. If you
+encounter any unexpected behaviors with using the -R command, please open up an issue.
 
 YACpkTool's HELP information:
 
@@ -25,11 +25,11 @@ Technical CLI usage:
     -X {file}   Extracts files. Optional argument: A specific file
     -P          Packages a folder to a CPK.
     -R {file}(in cpk) {file}(in dir)
-                Replaces a specified file in the CPK.
+                EXPERIMENTAL! Replaces a specified file in the CPK.
     -L          Lists the file contents and some basic information about the CPK.
   options:
     -h          Displays this help information + examples + about info
-    -v          Displays technical info about the running process (TODO).
+    -v          Displays technical info about the running process.
     -i {name}   Your input file or folder name (REQUIRED FOR ALL COMMANDS)
     -o {name}   Your output file or folder name (relative or absolute)
     -d {path}   Directory name. If specified, extraction and/or packaging will search here instead.

@@ -264,7 +264,7 @@ namespace YACpkTool
             }
             else if (doPack)
             {
-                //Console.WriteLine("DEBUG: doPack! - TODO");
+                //Console.WriteLine("DEBUG: doPack!");
                 cpkMaker.CpkFileMode = CpkMaker.EnumCpkFileMode.ModeFilename;
                 cpkMaker.CompressCodec = compressCodec;
                 cpkMaker.DataAlign = dataAlign;
@@ -293,7 +293,7 @@ namespace YACpkTool
             }
             else if (doReplace)
             {
-                //Console.WriteLine("DEBUG: doReplace! - TODO");
+                //Console.WriteLine("DEBUG: doReplace!");
 
                 CFileInfo cFileInfo = cpkFileData.GetFileData(replaceWhat);
                 if (cFileInfo != null)
@@ -340,28 +340,37 @@ namespace YACpkTool
                     patchedFile.WriteOpen(outFileName, true);
                     patchedFile.WaitForComplete();
                     Console.WriteLine("Patching in files...");
-                    unsafe
+
+                    for (int i = 0; i < cpkMaker.FileData.FileInfos.Count; i++)
                     {
-                        for (int i = 0; i < cpkMaker.FileData.FileInfos.Count; i++)
+                        // I feel like I'd rather just compare CFileInfo.InfoIndex, but I'm a bit paranoid about that...
+                        // At least directly comparing the content path is assured without a shadow of a doubt to tell us what we need to know
+                        // I want to avoid unnecessary instance invocations of objects and complex conditionals if possible
+                        // Please, for the sake of this loop, never invoke CpkMaker.FileData.UpdateFileInfoIndex()
+                        //if(String.Equals(cpkFileData.FileInfos[i].ContentFilePath, cFileInfo.ContentFilePath)) { continue; }
+
+                        CFileInfo currNewFileInfo = cpkMaker.FileData.FileInfos[i];
+                        CFileInfo currOldFileInfo = cpkFileData.GetFileData(currNewFileInfo.ContentFilePath);
+                        bool wasThisPatched = (currNewFileInfo.InfoIndex == cFileInfo.InfoIndex);
+                        if (!wasThisPatched)  // Eh, I'll try it. 
                         {
-                            if(String.Equals(cpkFileData.FileInfos[i].ContentFilePath, cFileInfo.ContentFilePath)) { continue; }
-
-                            CFileInfo currNewFileInfo = cpkMaker.FileData.FileInfos[i];
-                            CFileInfo currOldFileInfo = cpkFileData.GetFileData(currNewFileInfo.ContentFilePath);
-
                             patchedFile.Position = currNewFileInfo.Offset + currOldFileInfo.DataAlign;
-                            if (bVerbose) { Console.WriteLine("[" + currNewFileInfo.InfoIndex.ToString().PadLeft(5) + "]   " + currNewFileInfo.ContentFilePath + " ..."); }
                             //Console.WriteLine("Current position = 0x" + patchedFile.Position.ToString("X8"));
                             currOldFile.ReadAlloc(currOldFileInfo.Offset + currOldFileInfo.DataAlign, currOldFileInfo.Filesize);
                             currOldFile.WaitForComplete();
-                            
-                            patchedFile.Write(currOldFile.ReadBuffer, currOldFileInfo.Filesize, CAsyncFile.WriteMode.Normal);
-                            patchedFile.WaitForComplete();
-
+                            unsafe
+                            {
+                                patchedFile.Write(currOldFile.ReadBuffer, currOldFileInfo.Filesize, CAsyncFile.WriteMode.Normal);
+                                patchedFile.WaitForComplete();
+                            }
                             currOldFile.ReleaseBuffer();
-                            //if (true) return; // Used with debugging
                         }
+                        if (bVerbose) { Console.WriteLine("[" + currNewFileInfo.InfoIndex.ToString().PadLeft(5) + "] " +
+                                (wasThisPatched ? "PATCHED " : "  ") + currNewFileInfo.ContentFilePath + " ...");
+                        }
+                        //if (true) return; // Used with debugging
                     }
+
                     Console.WriteLine("Patch complete!");
                 }
                 else
@@ -438,11 +447,11 @@ namespace YACpkTool
                 Console.WriteLine("    -X {file}   Extracts files. Optional argument: A specific file");
                 Console.WriteLine("    -P          Packages a folder to a CPK.");
                 Console.WriteLine("    -R {file}(in cpk) {file}(in dir)");
-                Console.WriteLine("                Replaces a specified file in the CPK." + (((printFlags & HELP_INFO) == 0) ? " See help for more info." : ""));
+                Console.WriteLine("                EXPERIMENTAL! Replaces a specified file in the CPK." + (((printFlags & HELP_INFO) == 0) ? " See help for more info." : ""));
                 Console.WriteLine("    -L          Lists the file contents and some basic information about the CPK.");
                 Console.WriteLine("  options:");
                 Console.WriteLine("    -h          Displays this help information + examples + about info");
-                Console.WriteLine("    -v          Displays technical info about the running process (TODO).");
+                Console.WriteLine("    -v          Displays technical info about the running process.");
                 Console.WriteLine("    -i {name}   Your input file or folder name (REQUIRED FOR ALL COMMANDS)");
                 Console.WriteLine("    -o {name}   Your output file or folder name (relative or absolute)");
                 Console.WriteLine("    -d {path}   Directory name. If specified, extraction and/or packaging will search here instead.");
