@@ -5,7 +5,7 @@ It is designed in mind to be used by both those who don't need to understand usi
   
 #### Status
 I have provided compiled releases of this tool under [Releases](https://github.com/Brolijah/YACpkTool/releases/).  
-If you just want a link to the latest compiled build, then [click here](https://github.com/Brolijah/YACpkTool/releases/download/v1.0/YACpkTool.zip).  
+If you just want a link to the latest compiled build, then [click here](https://github.com/Brolijah/YACpkTool/releases/latest).  
   
 #### Requirements
  * Visual Studio 2017
