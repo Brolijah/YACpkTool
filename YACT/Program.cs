@@ -409,8 +409,8 @@ namespace YACpkTool
             else if (_doList)
             {
                 //Console.WriteLine("DEBUG: doList! - TODO");
-                //if (bVerbose) { cpkMaker.DebugPrintInternalInfo(); }
-                //else { Console.WriteLine(cpkMaker.GetCpkInformationString(true, false)); }
+                if (bVerbose) { cpkMaker.DebugPrintInternalInfo(); }
+                else { Console.WriteLine(cpkMaker.GetCpkInformationString(true, false)); }
 
                 if(bUseCsv)
                 {
@@ -525,11 +525,11 @@ namespace YACpkTool
                         '"' + cfi.ContentFilePath + '"' + ", " +
                         cfi.FileId.ToString().PadLeft(8) + ", " +
                         (cfi.IsCompressed ? "Compress" : "Uncompress") + ", " +
-                        '"' + (cfi.GroupString != null ? cfi.GroupString.Replace("/", "").Replace("(none)", "") : "" ) + '"' + ", " +
-                        '"' + (cfi.AttributeString != null ? cfi.AttributeString : "") + '"');
+                        '"' + cfi.GroupDisplayString.Replace("/", "").Replace("(none)", "") + '"' + ", " +
+                        '"' + cfi.AttributeDisplayString + '"');
                     csvContents.Add(lineString);
                 }
-                File.Create(csvPath).Close();
+                //File.Create(csvPath).Close();
                 File.WriteAllLines(csvPath, csvContents, Encoding.UTF8);
             } catch { return false; }
             return true;
