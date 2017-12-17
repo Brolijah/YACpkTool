@@ -25,6 +25,7 @@ namespace YACpkTool
 
             bool bList = false; // Old method, TODO update
             bool bVerbose = false;
+            bool bUseCsv = false;
             bool doExtract = false;
             bool doPack = false;
             bool doReplace = false;
@@ -37,6 +38,7 @@ namespace YACpkTool
             string extractWhat = null;
             string replaceWhat = null;
             string replaceWith = null;
+            string csvFileName = null;
 
     // STEP 1 - PARSE THE ARGUMENTS
             byte usageHelpFlags = 0x00;
@@ -73,12 +75,19 @@ namespace YACpkTool
                                 case 'o': outFileName = args[i + 1]; break;
                                 case 'd': workingDir = args[i + 1]; break;
                                 case 'v': bVerbose = true; break;
-                                // These are packing options
+                                // Extra options
                                 case '-':
                                     switch (option.Substring(2))
                                     {
+                                        // These are packing options
                                         case "codec": packCompressCodec = args[i + 1]; break;
                                         case "align": packDataAlign = args[i + 1]; break;
+                                        // For each packing, extracting, and listing
+                                        case "csv":
+                                            bUseCsv = true;
+                                            try { csvFileName = args[i + 1]; }
+                                            catch { csvFileName = null; }
+                                            break;
                                     }
                                     break;
                                 case 'h': usageHelpFlags |= HELP_INFO; break;
@@ -148,26 +157,16 @@ namespace YACpkTool
             // (2) output path - Preparing output directories
             if (outFileName != null)
             {
-                string uriPrefix = "file:///";
-                string uriString = null;
-                // Cheap botch to check if it's an absolute path
-                if (!((outFileName.Length > 3) && String.Equals(outFileName.Substring(1,2).Replace('\\','/'), ":/")))
+                if(!ValidateFilePathString(workingDir, ref outFileName))
                 {
-                    outFileName = workingDir + "\\" + outFileName;
-                }
-                uriString = uriPrefix + outFileName.Replace('\\', '/');
-                if (!Uri.IsWellFormedUriString(uriString, UriKind.Absolute))
-                {
-                    //Console.WriteLine("DEBUG: uriString: \"" + uriString + "\"");
                     Console.WriteLine("Error: Invalid output path specified. Exiting process.");
                     return;
                 }
-                outFileName = outFileName.Replace('/', '\\');
             }
             // (3) packing options - compression codec, data alignment
             EnumCompressCodec compressCodec = EnumCompressCodec.CodecDpk;
             uint dataAlign = 2048;
-            if (doPack || doReplace)
+            if (doPack)
             {
                 if (packCompressCodec != null)
                 {
@@ -209,6 +208,23 @@ namespace YACpkTool
                         }
                     }
                     catch { Console.WriteLine("Error: A non-number was specified for the data alignment!"); return; }
+                }
+            }
+            // (4) Validate the path for a CSV file
+            if(bUseCsv)
+            {
+                if((csvFileName == null) || (csvFileName[0] == '-'))
+                {
+                    csvFileName = Path.GetFileNameWithoutExtension(inFileName);
+                }
+                if(!(ValidateFilePathString(workingDir, ref csvFileName)))
+                {
+                    Console.WriteLine("Error: Unable to prepare a file path for the CSV file!");
+                    return;
+                }
+                if(!String.Equals(Path.GetExtension(csvFileName), ".csv", StringComparison.OrdinalIgnoreCase))
+                {
+                    csvFileName += ".csv";
                 }
             }
 
@@ -261,25 +277,46 @@ namespace YACpkTool
                     try { Directory.CreateDirectory(outFileName); } catch { }
                     cpkMaker.StartToExtract(outFileName); // Continues at STEP 4
                 }
+
+                if (bUseCsv)
+                {
+                    if (!ExportCsv(csvFileName, Path.GetFileNameWithoutExtension(outFileName), ref cpkFileData))
+                    {
+                        Console.WriteLine("Error: Something went wrong exporting CSV file!");
+                        return;
+                    }
+                }
             }
             else if (doPack)
             {
                 //Console.WriteLine("DEBUG: doPack!");
-                cpkMaker.CpkFileMode = CpkMaker.EnumCpkFileMode.ModeFilename;
-                cpkMaker.CompressCodec = compressCodec;
-                cpkMaker.DataAlign = dataAlign;
-
-                uint i = 0;
-                string[] files = Directory.GetFiles(inFileName, "*", SearchOption.AllDirectories);
-                foreach(string file in files)
+                if (bUseCsv)
                 {
-                    if(File.Exists(file))
+                    if(AnalyzeCsv(csvFileName, dataAlign, out CpkMaker csvCpkMaker))
                     {
-                        string localpath = file.Replace(inFileName, "");
-                        localpath = localpath.Replace('\\', '/');
-                        if(localpath[0] == '/') { localpath = localpath.Substring(1); }
-                        //Console.WriteLine("Local path = \"" + localpath + "\"");
-                        cpkMaker.AddFile(file, localpath, i++, (((int)compressCodec == 1) ? false : true), "", "", dataAlign);
+                        cpkMaker= csvCpkMaker;
+                    } else { Console.WriteLine("Error: AnalyzeCsv() returned false! Invalid CSV entry?"); return; }
+                    
+                    //if (true) return; // iz debugging PokeSlow
+
+                } else
+                {
+                    cpkMaker.CpkFileMode = CpkMaker.EnumCpkFileMode.ModeFilename;
+                    cpkMaker.CompressCodec = compressCodec;
+                    cpkMaker.DataAlign = dataAlign;
+
+                    uint i = 0;
+                    string[] files = Directory.GetFiles(inFileName, "*", SearchOption.AllDirectories);
+                    foreach (string file in files)
+                    {
+                        if (File.Exists(file))
+                        {
+                            string localpath = file.Replace(inFileName, "");
+                            localpath = localpath.Replace('\\', '/');
+                            if (localpath[0] == '/') { localpath = localpath.Substring(1); }
+                            //Console.WriteLine("Local path = \"" + localpath + "\"");
+                            cpkMaker.AddFile(file, localpath, i++, (((int)compressCodec == 1) ? false : true), "", "", dataAlign);
+                        }
                     }
                 }
                 
@@ -298,21 +335,11 @@ namespace YACpkTool
                 CFileInfo cFileInfo = cpkFileData.GetFileData(replaceWhat);
                 if (cFileInfo != null)
                 {
-                    string uriPrefix = "file:///";
-                    string uriString = null;
-                    // Cheap botch to check if it's an absolute path
-                    if (!((replaceWith.Length > 3) && String.Equals(replaceWith.Substring(1, 2).Replace('\\', '/'), ":/")))
+                    if(!(ValidateFilePathString(workingDir, ref replaceWith)))
                     {
-                        replaceWith = workingDir + "\\" + replaceWith;
-                    }
-                    uriString = uriPrefix + replaceWith.Replace('\\', '/');
-                    if (!Uri.IsWellFormedUriString(uriString, UriKind.Absolute))
-                    {
-                        //Console.WriteLine("DEBUG: uriString: \"" + uriString + "\"");
                         Console.WriteLine("Error: Unable to locate the specified file to inject.");
                         return;
                     }
-                    replaceWith = replaceWith.Replace('/', '\\');
 
                     if (outFileName == null)
                     {
@@ -384,6 +411,15 @@ namespace YACpkTool
                 //Console.WriteLine("DEBUG: doList! - TODO");
                 if (bVerbose) { cpkMaker.DebugPrintInternalInfo(); }
                 else { Console.WriteLine(cpkMaker.GetCpkInformationString(true, false)); }
+
+                if(bUseCsv)
+                {
+                    if(!ExportCsv(csvFileName, Path.GetFileNameWithoutExtension(inFileName), ref cpkFileData))
+                    {
+                        Console.WriteLine("Error: Something went wrong exporting CSV file!");
+                        return;
+                    }
+                }
             }
             else
             {
@@ -391,7 +427,7 @@ namespace YACpkTool
                 return;
             }
 
-            // STEP 4 - PROGRESS LOOP FOR WHERE APPLICABLE (after I complete the above versions)
+    // STEP 4 - PROGRESS LOOP FOR WHERE APPLICABLE (after I complete the above versions)
             if (doExtract || doPack)
             {
                 int last_p = -1;
@@ -413,6 +449,90 @@ namespace YACpkTool
             }
 
             Console.WriteLine("\nProcess finished (hopefully) without issues!");
+        }
+        
+        // Simple function to use for file paths other than input files
+        // Please never send a null filename.
+        static bool ValidateFilePathString(string workingPath, ref string filename)
+        {
+            string uriPrefix = "file:///";
+            string uriString = null;
+            // Cheap botch to check if it's an absolute path
+            if (!((filename.Length > 3) && String.Equals(filename.Substring(1, 2).Replace('\\', '/'), ":/")))
+            {
+                filename = workingPath + "\\" + filename;
+            }
+            uriString = uriPrefix + filename.Replace('\\', '/');
+            if (!Uri.IsWellFormedUriString(uriString, UriKind.Absolute))
+            {
+                //Console.WriteLine("DEBUG: uriString: \"" + uriString + "\"");
+                return false;
+            }
+            filename = filename.Replace('/', '\\');
+            return true;
+        }
+
+        static bool AnalyzeCsv(string csvPath, uint dataAlign, out CpkMaker csvCpkMaker)
+        {
+            csvCpkMaker = new CpkMaker();
+            string[] csvLines = File.ReadAllLines(csvPath);
+
+            bool useIds = false;
+            bool useGroups = false;
+            uint lastId = 0;
+            try
+            {
+                for (int i = 0; i < csvLines.Length; i++)
+                {
+                    string[] csvRow = System.Text.RegularExpressions.Regex.Split(csvLines[i], @",(?=(?:[^""]*""[^""]*"")*(?![^""]*""))");
+                    // These first two I am requiring
+                    string filePath = Path.GetDirectoryName(csvPath) + '\\' + csvRow[0].Replace("\"", "").Replace("/", "\\").Replace(" ", ""); // don't question it
+                    // Unlike CriWare's official tools, I'm not allowing leaving out the content file path (not right now anyway)
+                    string contentPath = csvRow[1].Replace("\"", "").Replace(" ", "");
+                    // If omitted, it will be the last used id +1
+                    int regId = ((3 <= csvRow.Length && Int32.TryParse(csvRow[2], out int id)) ? id : (int)(lastId));
+                    if (regId != lastId) { useIds = true; lastId = (uint)regId; }
+                    // I'm using a level of trust here that if it's not this, then it must be uncompressed.
+                    bool compress = ((4 <= csvRow.Length) &&
+                        ((String.Equals(csvRow[3].Replace(" ", ""), "Compress", StringComparison.InvariantCultureIgnoreCase)) ||
+                          String.Equals(csvRow[3].Replace(" ", ""), "C", StringComparison.InvariantCultureIgnoreCase))) ? true : false;
+                    // No comment to be said
+                    string groups = ((5 <= csvRow.Length)) ? csvRow[4].Replace("\"", "").Replace(" ", "") : "";
+                    string attributes = ((6 <= csvRow.Length)) ? csvRow[5].Replace("\"", "").Replace(" ", "") : "";
+                    if (!String.Equals(groups.Replace(" ", ""), "")) { useGroups = true; }
+
+                    csvCpkMaker.AddFile(filePath, contentPath, lastId++, compress, groups, attributes, dataAlign, false, regId);
+                }
+
+                if(useIds && useGroups) { csvCpkMaker.CpkFileMode = CpkMaker.EnumCpkFileMode.ModeFilenameIdGroup; }
+                else if (useIds) { csvCpkMaker.CpkFileMode = CpkMaker.EnumCpkFileMode.ModeFilenameAndId; }
+                else if (useGroups) { csvCpkMaker.CpkFileMode = CpkMaker.EnumCpkFileMode.ModeFilenameAndGroup; }
+                else { csvCpkMaker.CpkFileMode = CpkMaker.EnumCpkFileMode.ModeFilename; }
+
+            } catch { return false; }
+            return true;
+        }
+
+        static bool ExportCsv(string csvPath, string cpkName, ref CFileData fileData)
+        {
+            try
+            {
+                List<String> csvContents = new List<string>();
+                foreach(CFileInfo cfi in fileData.FileInfos)
+                {
+                    string lineString = (
+                        '"' + cpkName + "/" + cfi.ContentFilePath + '"' + ", " +
+                        '"' + cfi.ContentFilePath + '"' + ", " +
+                        cfi.FileId.ToString().PadLeft(8) + ", " +
+                        (cfi.IsCompressed ? "Compress" : "Uncompress") + ", " +
+                        '"' + cfi.GroupString.Replace("/", "").Replace("(none)", "") + '"' + ", " +
+                        '"' + cfi.AttributeString + '"');
+                    csvContents.Add(lineString);
+                }
+                File.Create(csvPath).Close();
+                File.WriteAllLines(csvPath, csvContents, Encoding.UTF8);
+            } catch { return false; }
+            return true;
         }
 
 
@@ -457,11 +577,13 @@ namespace YACpkTool
                 Console.WriteLine("    -d {path}   Directory name. If specified, extraction and/or packaging will search here instead.");
 
                 Console.WriteLine("");
-                Console.WriteLine("  packing options (only use if you know what to do):");
-                Console.WriteLine("    --codec {name}    Compression codec to use.");
-                Console.WriteLine("                      Default is none. Available options: none, layla"); //, lzma, relc");
+                Console.WriteLine("  extra options:");
+                Console.WriteLine("    --csv {name}      A specified CSV file (relative or absolute)");
+                Console.WriteLine("                      Can be used to export a CSV or to read from a CSV (when applicable).");
                 Console.WriteLine("    --align {size}    Data alignment of the CPK.");
                 Console.WriteLine("                      Default is 2048. Available options: Powers of 2 between 1 and 32768.");
+                Console.WriteLine("    --codec {name}    (Packing only.) Compression codec to use.");
+                Console.WriteLine("                      Default is none. Available options: none, layla"); //, lzma, relc");
             if ((printFlags & HELP_INFO) > 0)
             {
                 Console.WriteLine("");

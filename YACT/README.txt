@@ -34,11 +34,13 @@ Technical CLI usage:
     -o {name}   Your output file or folder name (relative or absolute)
     -d {path}   Directory name. If specified, extraction and/or packaging will search here instead.
 
-  packing options (only use if you know what to do):
-    --codec {name}    Compression codec to use.
-                      Default is none. Available options: none, layla
+  extra options:
+    --csv {name}      A specified CSV file (relative or absolute)
+                      Can be used to export a CSV or to read from a CSV (when applicable).
     --align {size}    Data alignment of the CPK.
                       Default is 2048. Available options: Powers of 2 between 1 and 32768.
+    --codec {name}    (Packing only.) Compression codec to use.
+                      Default is none. Available options: none, layla
 
   Examples:
     Listing contents:
